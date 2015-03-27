@@ -9,8 +9,6 @@ COMEDI_GIT=comedi_git
 
 
 function load_comedi_test() { 
-    #sudo modprobe comedi comedi_num_legacy_minors=8         
-    #sudo modprobe comedi_test
     sudo insmod ${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi/comedi.ko comedi_num_legacy_minors=8        
     sudo insmod ${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi/drivers/comedi_fc.ko 
     sudo insmod ${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi/drivers/comedi_test.ko 
@@ -21,10 +19,9 @@ function unload_comedi_test() {
     sudo rmmod comedi comedi_test comedi_fc
 }
 
-#
+#=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 # Load the temp accesisa
-#
-
+#=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 function build_acces() { 
     dir=$(pwd)
     cd COMEDI_GIT && make
