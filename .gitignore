@@ -2,3 +2,10 @@ CExample/pc104_test
 CExample/tut_ref
 CExample/*.tap
 comedi_git
+Documentation/*.pdf
+Documentation/*.PDF
+Documentation/*.log
+Documentation/*.aux
+Documentation/*.out
+
+
