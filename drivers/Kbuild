@@ -135,4 +135,5 @@ obj-m += accesisa.o
 obj-m += ssv_dnp.o
 obj-m += s526.o
 obj-m += comedi_test.o
+obj-m += comedi_test2.o
 obj-m += unioxx5.o
