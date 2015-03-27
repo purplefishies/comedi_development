@@ -27,8 +27,8 @@ function unload_comedi_test() {
 
 function build_acces() { 
     dir=$(pwd)
-    cd comedi && make
-    cd $(dir)
+    cd COMEDI_GIT && make
+    cd ${dir}
 }
 
 function load_acces() { 
