@@ -25,6 +25,8 @@ Configuration Options:
 #define ACCES_READ 0xff00
 #define ACCES_WRITE 0x00ff
 
+#define N_CHANS 8
+
 
 #define MAKE_ADDRESS(X,Y)  ((X << 16 ) && (Y))
 #define BASE_ADDRESS(X)    ((0xffff) && (X) )
@@ -62,6 +64,14 @@ typedef struct accesisa_board_struct {
     int num;
     int iosize;
 } accesisa_board;
+
+static const comedi_lrange waveform_ai_ranges = {
+	2,
+	{
+			BIP_RANGE(10),
+			BIP_RANGE(5),
+		}
+};
 
 static const accesisa_board accesisa_boards[] = {
 	{
@@ -146,6 +156,20 @@ typedef struct {
     /* struct pci_dev *pci_dev; */
     /* Used for AO readback */
     lsampl_t ao_readback[2];
+    volatile lsampl_t ao_loopbacks[N_CHANS];
+
+    struct timer_list timer;
+    struct timeval last;	// time at which last timer interrupt occured
+    unsigned int uvolt_amplitude;	// waveform amplitude in microvolts
+    unsigned long usec_period;	// waveform period in microseconds
+    volatile unsigned long usec_current;	// current time (modulo waveform period)
+    volatile unsigned long usec_remainder;	// usec since last scan;
+    volatile unsigned long ai_count;	// number of conversions remaining
+    unsigned int scan_period;	// scan period in usec
+    unsigned int convert_period;	// conversion period in usec
+    volatile unsigned timer_running:1;
+
+
 } accesisa_private;
 
 /*
@@ -175,6 +199,10 @@ static comedi_driver driver_accesisa = {
 static int waveform_ai_cmdtest(comedi_device * dev, comedi_subdevice * s,
                                comedi_cmd * cmd);
 static int waveform_ai_cmd(comedi_device * dev, comedi_subdevice * s);
+static int waveform_ai_cancel(comedi_device * dev, comedi_subdevice * s);
+
+static int waveform_ai_insn_read(comedi_device * dev, comedi_subdevice * s,
+	comedi_insn * insn, lsampl_t * data);
 
 static int accesisa_cmd_irq(comedi_device * dev, comedi_subdevice * s);
 
@@ -326,7 +354,7 @@ static int accesisa_attach(comedi_device * dev, comedi_devconfig * it)
          * Allocate the subdevice structures.  alloc_subdevice() is a
          * convenient macro defined in comedidev.h.
          */
-	if (alloc_subdevices(dev, 2) < 0)
+	if (alloc_subdevices(dev, 3) < 0)
 		return -ENOMEM;
 
         /*------------------------------  FIRST DEVICE -------------------------------*/
@@ -348,14 +376,40 @@ static int accesisa_attach(comedi_device * dev, comedi_devconfig * it)
 
         /*------------------------------  NEXT DEVICE  -------------------------------*/
 	s = dev->subdevices + 1;
+	dev->read_subdev = s;
+        s->type = COMEDI_SUBD_DI;
+	s->subdev_flags = SDF_READABLE | SDF_CMD_READ | SDF_GROUND ;
+	s->len_chanlist = s->n_chan * 2;
+        s->maxdata = 1;
+	s->range_table = &range_digital;
+        s->insn_bits    = accesisa_dio_insn_bits;
+        s->insn_config  = accesisa_dio_insn_config;
+	s->do_cmd       = waveform_ai_cmd;
+	s->do_cmdtest   = waveform_ai_cmdtest;
+        s->n_chan = thisboard->num_in_bits;
+
+
 	/* Digital Output subdevice */
-	s->type          = COMEDI_SUBD_DI;
-	s->subdev_flags  = SDF_READABLE;
-        s->range_table   = &range_digital;
-	s->insn_write    = accesisa_ao_winsn;
-	s->insn_read     = accesisa_ao_rinsn;
-        s->insn_bits     = accesisa_dio_insn_bits;
-        s->n_chan        = thisboard->num_in_bits;
+	/* s->type          = COMEDI_SUBD_DI; */
+	/* s->subdev_flags  = SDF_READABLE | SDF_GROUND | SDF_CMD_READ ; */
+        /* s->range_table   = &range_digital; */
+	/* s->insn_write    = accesisa_ao_winsn; */
+	/* s->insn_read     = accesisa_ao_rinsn; */
+        /* s->insn_bits     = accesisa_dio_insn_bits; */
+        /* s->n_chan        = thisboard->num_in_bits; */
+        /*-----------------------------  THIRD DEVICE  -----------------------------*/
+	s = dev->subdevices + 2;
+        s->type = COMEDI_SUBD_AI;
+        s->subdev_flags = SDF_READABLE | SDF_GROUND | SDF_CMD_READ;
+        s->n_chan = thisboard->ai_chans;
+        s->maxdata = (1 << thisboard->ai_bits) - 1;
+        s->range_table = &waveform_ai_ranges;
+        s->len_chanlist = s->n_chan * 2;
+        s->insn_read = waveform_ai_insn_read;
+        s->do_cmd = waveform_ai_cmd;
+        s->do_cmdtest = waveform_ai_cmdtest;
+        s->cancel = waveform_ai_cancel;
+
 
 	printk("attached\n");
 
@@ -416,6 +470,18 @@ static int accesisa_ai_rinsn(comedi_device * dev, comedi_subdevice * s,
 	/* return the number of samples read/written */
 	return n;
 }
+
+static int waveform_ai_insn_read(comedi_device * dev, comedi_subdevice * s,
+	comedi_insn * insn, lsampl_t * data)
+{
+	int i, chan = CR_CHAN(insn->chanspec);
+
+	for (i = 0; i < insn->n; i++)
+		data[i] = devpriv->ao_loopbacks[chan];
+
+	return insn->n;
+}
+
 
 static int accesisa_cmd_irq(comedi_device * dev, comedi_subdevice * s)
 {
@@ -882,6 +948,14 @@ void debug_comedi_insn( comedi_insn *insn )
     printk("  num: %d\n", insn->n );
 }
 
+static int waveform_ai_cancel(comedi_device * dev, comedi_subdevice * s)
+{
+	devpriv->timer_running = 0;
+	del_timer_sync(&devpriv->timer);
+	return 0;
+}
+
+
 /* DIO devices are slightly special.  Although it is possible to
  * implement the insn_read/insn_write interface, it is much more
  * useful to applications if you implement the insn_bits interface.
@@ -938,9 +1012,6 @@ static int accesisa_dio_insn_bits(comedi_device * dev, comedi_subdevice * s,
 
 	return 2;
 }
-
-/* data[0] = 0; */
-/* s->state = data[1]; */
 
 /* The insn data is a mask in data[0] and the new data
  * in data[1], each channel cooresponding to a bit. */

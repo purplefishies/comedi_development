@@ -135,6 +135,36 @@ static const comedi_lrange waveform_ai_ranges = {
 		}
 };
 
+
+/* Parent sysfs show() method. Calls the show() method corresponding to the individual sysfs file */
+static ssize_t my_show(struct kobject *kobj, struct attribute *a, char *buf)
+{
+    int ret;
+    struct led_attr *lattr = container_of(a, struct led_attr,attr );
+    ret = lattr->show ? lattr->show(buf) : -EIO;
+    return ret;
+}
+
+/* Sysfs store() method. Calls the store() method corresponding to the individual sysfs file */
+static ssize_t my_store(struct kobject *kobj, struct attribute *a,
+                        const char *buf, size_t count)
+{
+
+}
+
+/**
+ * Instead , I want to create a sysfs entry point to 
+ * allow this type of entry to be created / manipulated
+ *
+ **/
+static struct sysfs_ops sysfs_ops = {
+    .show = my_show,
+    .store = my_store,
+};
+
+
+
+
 /*
    This is the background routine used to generate arbitrary data.
    It should run in the background; therefore it is scheduled by
@@ -254,7 +284,7 @@ static int waveform_attach(comedi_device * dev, comedi_devconfig * it)
 	}
 
 	init_timer(&(devpriv->timer));
-	devpriv->timer.function = waveform_ai_interrupt;
+	/* devpriv->timer.function = waveform_ai_interrupt; */
 	devpriv->timer.data = (unsigned long)dev;
 
 	printk("attached\n");

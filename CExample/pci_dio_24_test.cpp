@@ -7,10 +7,6 @@
  *
  */
 
-/*
- * The program is used to test the usbdux sigma board
- */
-
 #include <stdio.h>
 #include <comedilib.h>
 #include <fcntl.h>
@@ -20,7 +16,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include "gtest/gtest.h"
-#include "tap.h"
 
 extern comedi_t *device;
 
@@ -39,8 +34,6 @@ struct parsed_options
     double freq;
     int dosomething;
 };
-
-
 
 /* #define BUFSZ 10000 */
 /* char buf[BUFSZ]; */
@@ -86,77 +79,43 @@ TEST(ComediBasic,AbleToDoSomething) {
  * This test proves that we can read from the card.
  * Now, we want a way to verify that we can actually write to the card too !
  */
-TEST(ComediBasic,Test_read_auto_incrementing_digital ) {
-    lsampl_t data;
-    int ret;
-    int subdev = 0;        
-    int chan = 0;          
-    int range = 0;         
-    int aref = AREF_GROUND;
-
-    dev = comedi_open(options.filename);
-    ASSERT_TRUE( dev );
-    subdev_flags = comedi_get_subdevice_flags(dev, options.subdevice);
-    ret = comedi_dio_config( dev, options.subdevice, options.channel, COMEDI_INPUT );
-    ASSERT_TRUE( ret >= 0 );
-
-    COMEDI_DIO_BITFIELD(dev,options.subdevice, 0, &data);
-    EXPECT_EQ( data, 0x00 );
-    COMEDI_DIO_BITFIELD(dev,options.subdevice, 0, &data);
-    EXPECT_EQ( data, 0x01 );
-    COMEDI_DIO_BITFIELD(dev,options.subdevice, 0, &data);
-    EXPECT_EQ( data, 0x02 );
-    comedi_close( dev );
+TEST(PCI_DIO_48,Test_read_auto_incrementing_digital ) {
 }
 
 #define COMEDI_DIO_BITFIELD2(...)   ret  = comedi_dio_bitfield2( __VA_ARGS__); \
     ASSERT_TRUE( ret >= 0 );
 
 
-TEST(ComediBasic,Test_writing_digital ) {
-    lsampl_t data;
-    int ret;
-    int subdev = 0;        
-    int chan = 0;          
-    int range = 0;         
-    int aref = AREF_GROUND;
+TEST(Pci_Dio_48,Test_writing_digital ) {
+    // lsampl_t data;
+    // int ret;
+    // int subdev = 0;        
+    // int chan = 0;          
+    // int range = 0;         
+    // int aref = AREF_GROUND;
 
-    dev = comedi_open(options.filename);
-    ASSERT_TRUE( dev );
-    subdev_flags = comedi_get_subdevice_flags(dev, options.subdevice);
-    ret = comedi_dio_config( dev, options.subdevice, options.channel, COMEDI_OUTPUT );
-    ASSERT_TRUE( ret >= 0 );
-    data = 0x0;
-    COMEDI_DIO_BITFIELD2(dev,options.subdevice, 0, &data , 0);
-    /* EXPECT_EQ( data, 0x00 ); */
-    data = 0x1;
-    COMEDI_DIO_BITFIELD2(dev,options.subdevice, 0, &data , 0);
-    /* EXPECT_EQ( data, 0x01 ); */
-    data = 0x23;
-    COMEDI_DIO_BITFIELD2(dev,options.subdevice, 0, &data , 0);
-    /* EXPECT_EQ( data, 0x02 ); */
-    comedi_close( dev );
+    // dev = comedi_open(options.filename);
+    // ASSERT_TRUE( dev );
+    // subdev_flags = comedi_get_subdevice_flags(dev, options.subdevice);
+    // ret = comedi_dio_config( dev, options.subdevice, options.channel, COMEDI_OUTPUT );
+    // ASSERT_TRUE( ret >= 0 );
+    // data = 0x0;
+    // COMEDI_DIO_BITFIELD2(dev,options.subdevice, 0, &data , 0);
+    // /* EXPECT_EQ( data, 0x00 ); */
+    // data = 0x1;
+    // COMEDI_DIO_BITFIELD2(dev,options.subdevice, 0, &data , 0);
+    // /* EXPECT_EQ( data, 0x01 ); */
+    // data = 0x23;
+    // COMEDI_DIO_BITFIELD2(dev,options.subdevice, 0, &data , 0);
+    // /* EXPECT_EQ( data, 0x02 ); */
+    // comedi_close( dev );
+}
+
+TEST(Pci_Dio_48,TestDigital) {
 }
 
 
-TEST(ComediBasic,TestDigital) {
-    int stype;
-    dev = comedi_open(options.filename);
-    ASSERT_TRUE( dev );
-    stype = comedi_get_subdevice_type(dev, options.subdevice);
-    EXPECT_TRUE( stype >= 0 );
-    printf("value returned was %d\n", stype );
-    stype = comedi_get_subdevice_type(dev, options.subdevice2);
-    EXPECT_TRUE( stype >= 0 );
-    printf("value returned was %d\n", stype );
-    EXPECT_TRUE(0);
-}
-
-
-TEST(ComediBasic,TestDigital_again) {
-    /* init_parsed_options(&options); */
-    /* parse_options(&options, argc, argv); */
-    int stype;
+TEST(Pci_Dio_48,TestDigital_again) {
 }
 
                                           
