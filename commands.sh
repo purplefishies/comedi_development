@@ -27,8 +27,11 @@ function unload_comedi_test() {
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 function build_acces() { 
     dir=$(pwd)
-    cd ${COMEDI_DEV_ROOT}/${COMEDI_GIT}
-    make -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi -C /lib/modules/3.13.0-46-generic/build M=${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi CC="gcc -I/home/jdamon/Projects/comedi_development/comedi_git/include -I/home/jdamon/Projects/comedi_development/comedi_git/include -I/home/jdamon/Projects/comedi_development/comedi_git/inc-wrap " modules
+    cd ${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi/drivers
+
+    make -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi -C /lib/modules/`uname -r`/build M=$(pwd) CC="gcc -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/include -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/inc-wrap"
+
+    # make -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi -C /lib/modules/3.13.0-46-generic/build M=${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi CC="gcc -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/include -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/include -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/inc-wrap " modules
 
     cd ${dir}
 }
@@ -70,10 +73,13 @@ function apci_mload() {
 }
 
 function apci_munload() {
-    if [ "$LAST_APCI_MODULE" == "" ] ; then
+    if [ "$LAST_APCI_MODULE" != "" ] ; then
         sudo rmmod $LAST_APCI_MODULE comedi
         unset LAST_APCI_MODULE
         unset LAST_MODULE_NAME
+    else
+        unset LAST_APCI_MODULE
+        sudo rmmod comedi
     fi
 }
 

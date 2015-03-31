@@ -84,11 +84,9 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 {
 	comedi_subdevice *s;
 
-	apci_info("comedi%d: apci: ", dev->minor);
-
+	apci_info("comedi%d: \n", dev->minor);
 
 	//dev->board_ptr = apci_probe(dev, it);
-
 
 	dev->board_name = thisboard->name;
 
@@ -146,7 +144,7 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 
         /* Done */
 
-	apci_info("attached\n");
+	apci_debug("attached\n");
 
 	return 0;
 }
@@ -163,6 +161,8 @@ static int apci_detach(comedi_device * dev)
 static int apci_dio_insn_bits(comedi_device * dev, comedi_subdevice * s,
 	comedi_insn * insn, lsampl_t * data)
 {
+
+        apci_debug("Writing/Reading\n");
 	if (insn->n != 2)
 		return -EINVAL;
 
@@ -186,7 +186,7 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 	comedi_insn * insn, lsampl_t * data)
 {
 	int chan = CR_CHAN(insn->chanspec);
-
+        apci_debug("Configuring...using channels: %d\n", chan );
 	
 	switch (data[0]) {
 	case INSN_CONFIG_DIO_OUTPUT:
