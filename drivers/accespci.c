@@ -1,6 +1,7 @@
 
 
 #include <linux/comedidev.h>
+#include "apci_common.h"
 
 #include <linux/pci.h>		
 
@@ -83,7 +84,7 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 {
 	comedi_subdevice *s;
 
-	printk("comedi%d: apci: ", dev->minor);
+	apci_info("comedi%d: apci: ", dev->minor);
 
 
 	//dev->board_ptr = apci_probe(dev, it);
@@ -145,7 +146,7 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 
         /* Done */
 
-	printk("attached\n");
+	apci_info("attached\n");
 
 	return 0;
 }
@@ -153,7 +154,7 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 
 static int apci_detach(comedi_device * dev)
 {
-	printk("comedi%d: apci: remove\n", dev->minor);
+	apci_info("comedi%d: apci: remove\n", dev->minor);
 
 	return 0;
 }
