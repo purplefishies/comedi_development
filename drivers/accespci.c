@@ -92,7 +92,7 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 
 
 	if (alloc_private(dev, sizeof(apci_private)) < 0)
-		return -ENOMEM;
+ 		return -ENOMEM;
 
 
 	if (alloc_subdevices(dev, 4) < 0)
@@ -143,7 +143,7 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
         s->insn_config = apci_dio_insn_config;	
 
         /* Done */
-
+        apci_info("Foo\n");
 	apci_debug("attached\n");
 
 	return 0;
@@ -152,7 +152,7 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 
 static int apci_detach(comedi_device * dev)
 {
-	apci_info("comedi%d: apci: remove\n", dev->minor);
+	apci_info("comedi%d: remove\n", dev->minor);
 
 	return 0;
 }
