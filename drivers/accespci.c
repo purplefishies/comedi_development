@@ -19,18 +19,18 @@ typedef struct apci_board_struct {
 	int have_dio;
 } apci_board;
 static const apci_board apci_boards[] = {
-	{
-	      name:	"pci_dio_24",
-	      ai_chans:16,
-	      ai_bits:	12,
-	      have_dio:1,
-		},
-	{
-	      name:	"pci_dio_48",
-	      ai_chans:8,
-	      ai_bits:	16,
-	      have_dio:0,
-		},
+    {
+    name:	"pci_dio_24",
+    ai_chans:16,
+    ai_bits:	12,
+    have_dio:1,
+    },
+    {
+    name:	"pci_dio_48",
+    ai_chans:8,
+    ai_bits:	16,
+    have_dio:0,
+    },
 };
 
 

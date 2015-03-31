@@ -16,6 +16,8 @@ function load_comedi_test() {
     sudo /usr/sbin/comedi_config -v /dev/comedi0 comedi_test --read-buffer 100 --write-buffer 100 20000,20000
 }
 
+
+
 function unload_comedi_test() { 
     sudo rmmod  comedi_test comedi_fc comedi 
 }
@@ -24,8 +26,6 @@ function unload_comedi_test() {
 # Load the temp accesisa
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 function build_acces() { 
-
-
     dir=$(pwd)
     cd ${COMEDI_DEV_ROOT}/${COMEDI_GIT}
     make -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi -C /lib/modules/3.13.0-46-generic/build M=${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi CC="gcc -I/home/jdamon/Projects/comedi_development/comedi_git/include -I/home/jdamon/Projects/comedi_development/comedi_git/include -I/home/jdamon/Projects/comedi_development/comedi_git/inc-wrap " modules
@@ -57,6 +57,25 @@ function load_custom_module() {
     sudo chmod a+rwx /dev/comedi0
 }
 
+function apci_mload() {
+    module=$1
+    sudo insmod ${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi/comedi.ko comedi_num_legacy_minors=8
+    sudo insmod ${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi/drivers/${module}.ko 
+    name=$(grep  -P "^\s*name:\s*" ${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi/drivers/${module}.c | head -1 | perl -pne 's/.*"(\S+?)".*/$1/;')
+    sudo /usr/sbin/comedi_config -v /dev/comedi0 ${name} 0,0,0
+    if [ "$?" == "0" ] ; then
+        export LAST_APCI_MODULE=${module}
+        export LAST_MODULE_NAME=${name}
+    fi
+}
+
+function apci_munload() {
+    if [ "$LAST_APCI_MODULE" == "" ] ; then
+        sudo rmmod $LAST_APCI_MODULE comedi
+        unset LAST_APCI_MODULE
+        unset LAST_MODULE_NAME
+    fi
+}
 
 function load_acces() { 
     sudo insmod ${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi/comedi.ko comedi_num_legacy_minors=8        
