@@ -7,10 +7,10 @@
 
 
 
-#define SKEL_SIZE 0
+#define APCI_SIZE 0
 
-#define SKEL_START_AI_CONV	0
-#define SKEL_AI_READ		0
+#define APCI_START_AI_CONV	0
+#define APCI_AI_READ		0
 
 
 typedef struct apci_board_struct {
@@ -36,10 +36,10 @@ static const apci_board apci_boards[] = {
 
 
 
-#define PCI_VENDOR_ID_SKEL 0xdafe
+#define PCI_VENDOR_ID_APCI 0xdafe
 static DEFINE_PCI_DEVICE_TABLE(apci_pci_table) = {
-	{PCI_VENDOR_ID_SKEL, 0x0100, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
-	{PCI_VENDOR_ID_SKEL, 0x0200, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{PCI_VENDOR_ID_APCI, 0x0100, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{PCI_VENDOR_ID_APCI, 0x0200, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
 	{0}
 };
 
@@ -64,7 +64,7 @@ typedef struct {
 
 static int apci_attach(comedi_device * dev, comedi_devconfig * it);
 static int apci_detach(comedi_device * dev);
-static comedi_driver driver_skel = {
+static comedi_driver driver_apci = {
       driver_name:"dummy",
       module:THIS_MODULE,
       attach:apci_attach,
@@ -171,11 +171,11 @@ static int apci_dio_insn_bits(comedi_device * dev, comedi_subdevice * s,
 		s->state &= ~data[0];
 		s->state |= data[0] & data[1];
 		
-		//outw(s->state,dev->iobase + SKEL_DIO);
+		//outw(s->state,dev->iobase + APCI_DIO);
 	}
 
 	
-	//data[1]=inw(dev->iobase + SKEL_DIO);
+	//data[1]=inw(dev->iobase + APCI_DIO);
 	
 	//data[1]=s->state;
 
@@ -205,12 +205,12 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 		return -EINVAL;
 		break;
 	}
-	//outw(s->io_bits,dev->iobase + SKEL_DIO_CONFIG);
+	//outw(s->io_bits,dev->iobase + APCI_DIO_CONFIG);
 
 	return insn->n;
 }
 
 
-COMEDI_INITCLEANUP(driver_skel);
+COMEDI_INITCLEANUP(driver_apci);
 
-// COMEDI_PCI_INITCLEANUP(driver_skel, apci_pci_table)
+// COMEDI_PCI_INITCLEANUP(driver_apci, apci_pci_table)
