@@ -20,13 +20,13 @@ typedef struct apci_board_struct {
 } apci_board;
 static const apci_board apci_boards[] = {
 	{
-	      name:	"apci-100",
+	      name:	"pci_dio_24",
 	      ai_chans:16,
 	      ai_bits:	12,
 	      have_dio:1,
 		},
 	{
-	      name:	"apci-200",
+	      name:	"pci_dio_48",
 	      ai_chans:8,
 	      ai_bits:	16,
 	      have_dio:0,
@@ -68,8 +68,6 @@ static comedi_driver driver_skel = {
       module:THIS_MODULE,
       attach:apci_attach,
       detach:apci_detach,
-
-	
       board_name:&apci_boards[0].name,
       offset:sizeof(apci_board),
       num_names:sizeof(apci_boards) / sizeof(apci_board),

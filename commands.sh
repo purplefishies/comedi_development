@@ -28,7 +28,7 @@ function build_acces() {
 
     dir=$(pwd)
     cd ${COMEDI_DEV_ROOT}/${COMEDI_GIT}
-    make -I/home/jdamon/Projects/comedi_development/comedi_git/comedi -C /lib/modules/3.13.0-46-generic/build M=/home/jdamon/Projects/comedi_development/comedi_git/comedi CC="gcc -I/home/jdamon/Projects/comedi_development/comedi_git/include -I/home/jdamon/Projects/comedi_development/comedi_git/include -I/home/jdamon/Projects/comedi_development/comedi_git/inc-wrap " modules
+    make -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi -C /lib/modules/3.13.0-46-generic/build M=${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi CC="gcc -I/home/jdamon/Projects/comedi_development/comedi_git/include -I/home/jdamon/Projects/comedi_development/comedi_git/include -I/home/jdamon/Projects/comedi_development/comedi_git/inc-wrap " modules
 
     cd ${dir}
 }
