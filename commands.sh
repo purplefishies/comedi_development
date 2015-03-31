@@ -29,9 +29,9 @@ function build_acces() {
     dir=$(pwd)
     cd ${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi/drivers
 
-    make -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi -C /lib/modules/`uname -r`/build M=$(pwd) CC="gcc -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/include -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/inc-wrap"
+    # make -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi -C /lib/modules/`uname -r`/build M=$(pwd) CC="gcc -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/include -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/inc-wrap"
 
-    # make -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi -C /lib/modules/3.13.0-46-generic/build M=${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi CC="gcc -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/include -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/include -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/inc-wrap " modules
+    make -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi -C /lib/modules/3.13.0-46-generic/build M=${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi CC="gcc -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/include -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/include -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/inc-wrap " modules
 
     cd ${dir}
 }
@@ -60,7 +60,7 @@ function load_custom_module() {
     sudo chmod a+rwx /dev/comedi0
 }
 
-function apci_mload() {
+function mload() {
     module=$1
     sudo insmod ${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi/comedi.ko comedi_num_legacy_minors=8
     sudo insmod ${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi/drivers/${module}.ko 
@@ -69,11 +69,17 @@ function apci_mload() {
     if [ "$?" == "0" ] ; then
         export LAST_APCI_MODULE=${module}
         export LAST_MODULE_NAME=${name}
+    else
+        echo "An error occurred...."
+        sudo rmmod comedi
     fi
 }
 
-function apci_munload() {
-    if [ "$LAST_APCI_MODULE" != "" ] ; then
+function munload() {
+    module=$1
+    if [ "${module}" == "" ] ; then 
+        sudo rmmod $module comedi
+    elif [ "$LAST_APCI_MODULE" != "" ] ; then
         sudo rmmod $LAST_APCI_MODULE comedi
         unset LAST_APCI_MODULE
         unset LAST_MODULE_NAME
