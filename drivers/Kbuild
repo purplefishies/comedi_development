@@ -130,8 +130,8 @@ obj-m += comedi_parport.o
 #obj-m += rti802.o
 #obj-m += serial2002.o
 obj-m += skel.o
-#CFLAGS_accesisa.o       := -std=gnu99
-#obj-m += accesisa.o
+CFLAGS_accesisa.o       := -std=gnu99
+obj-m += accesisa.o
 CFLAGS_accespci.o       :=  -std=gnu99 -DDEBUG -DA_PCI_DEBUG
 obj-m += accespci.o
 obj-m += ssv_dnp.o

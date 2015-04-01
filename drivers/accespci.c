@@ -124,7 +124,7 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 	s = dev->subdevices + 2;
 
 	s->type = COMEDI_SUBD_DIO;
-	s->subdev_flags = SDF_READABLE | SDF_WRITABLE;
+	s->subdev_flags = SDF_READABLE | SDF_WRITABLE | SDF_CMD_READ;
 	s->n_chan = 4;
 	s->maxdata = 1;
 	s->range_table = &range_digital;
@@ -135,7 +135,7 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 	s = dev->subdevices + 3;
 
 	s->type = COMEDI_SUBD_DIO;
-	s->subdev_flags = SDF_READABLE | SDF_WRITABLE;
+	s->subdev_flags = SDF_READABLE | SDF_WRITABLE | SDF_CMD_READ;
 	s->n_chan = 4;
 	s->maxdata = 1;
 	s->range_table = &range_digital;
@@ -149,14 +149,12 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 	return 0;
 }
 
-
 static int apci_detach(comedi_device * dev)
 {
 	apci_info("comedi%d: remove\n", dev->minor);
 
 	return 0;
 }
-
 
 static int apci_dio_insn_bits(comedi_device * dev, comedi_subdevice * s,
 	comedi_insn * insn, lsampl_t * data)
@@ -170,7 +168,6 @@ static int apci_dio_insn_bits(comedi_device * dev, comedi_subdevice * s,
 	if (data[0]) {
 		s->state &= ~data[0];
 		s->state |= data[0] & data[1];
-		
 		//outw(s->state,dev->iobase + APCI_DIO);
 	}
 
@@ -181,6 +178,8 @@ static int apci_dio_insn_bits(comedi_device * dev, comedi_subdevice * s,
 
 	return 2;
 }
+
+
 
 static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 	comedi_insn * insn, lsampl_t * data)
@@ -196,15 +195,14 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 		s->io_bits &= ~(1 << chan);
 		break;
 	case INSN_CONFIG_DIO_QUERY:
-		data[1] =
-			(s->
-			io_bits & (1 << chan)) ? COMEDI_OUTPUT : COMEDI_INPUT;
+		data[1] = (s-> io_bits & (1 << chan)) ? COMEDI_OUTPUT : COMEDI_INPUT;
 		return insn->n;
 		break;
 	default:
 		return -EINVAL;
 		break;
 	}
+        apci_debug("io_bits is : %d\n", s->io_bits );
 	//outw(s->io_bits,dev->iobase + APCI_DIO_CONFIG);
 
 	return insn->n;
