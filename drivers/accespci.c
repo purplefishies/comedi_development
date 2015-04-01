@@ -19,6 +19,13 @@ typedef struct apci_board_struct {
 	int ai_bits;
 	int have_dio;
 } apci_board;
+
+typedef struct {
+    int ofs;
+} subdev_private;
+
+
+
 static const apci_board apci_boards[] = {
     {
     name:	"pci_dio_24",
@@ -80,6 +87,11 @@ static int apci_dio_insn_bits(comedi_device * dev, comedi_subdevice * s,
 static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 	comedi_insn * insn, lsampl_t * data);
 
+static int apci_dio_read_cmd(comedi_device * dev, comedi_subdevice * s );
+static int apci_dio_read_cmdtest(comedi_device * dev, comedi_subdevice * s,
+        comedi_cmd * cmd);
+
+
 static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 {
 	comedi_subdevice *s;
@@ -108,6 +120,11 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 	s->range_table = &range_digital;
         s->insn_bits = apci_dio_insn_bits;
         s->insn_config = apci_dio_insn_config;
+        s->private = kmalloc(sizeof(subdev_private), GFP_KERNEL );
+        if (!s->private) {
+            apci_error("comedi%d: error! out of memory!\n", dev->minor);
+            return -ENOMEM;
+        }
 
         /*--------------------------------  B  --------------------------------*/
 	s = dev->subdevices + 1;
@@ -141,6 +158,8 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 	s->range_table = &range_digital;
         s->insn_bits = apci_dio_insn_bits;
         s->insn_config = apci_dio_insn_config;	
+        s->do_cmd      = apci_dio_read_cmd;
+        s->do_cmdtest  = apci_dio_read_cmdtest;
 
         /* Done */
         apci_info("Foo\n");
@@ -149,10 +168,68 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 	return 0;
 }
 
+static int apci_dio_read_cmd(comedi_device * dev, comedi_subdevice * s)
+{
+    return 0;
+}
+
+/**
+ * 
+ * @todo Activate the IRQs
+ * @todo Deactivate the IRQs
+ * 
+ */
+static int apci_dio_read_cmdtest(comedi_device * dev, comedi_subdevice * s,
+        comedi_cmd * cmd)
+{
+    int tmp;
+    int err = 0;
+    tmp = cmd->start_src;
+    cmd->start_src &= TRIG_NOW | TRIG_INT ;
+    if (!cmd->start_src || tmp != cmd->start_src)
+        err++;
+
+    tmp = cmd->scan_begin_src;
+    cmd->scan_begin_src &= TRIG_FOLLOW;
+    if (!cmd->scan_begin_src || tmp != cmd->scan_begin_src)
+        err++;
+
+    tmp = cmd->convert_src;
+    cmd->convert_src &= TRIG_TIMER | TRIG_EXT;
+    if (!cmd->convert_src || tmp != cmd->convert_src)
+        err++;
+
+    tmp = cmd->scan_end_src;
+    cmd->scan_end_src &= TRIG_COUNT;
+    if (!cmd->scan_end_src || tmp != cmd->scan_end_src)
+        err++;
+
+    tmp = cmd->stop_src;
+    cmd->stop_src &= TRIG_COUNT | TRIG_NONE;
+    if (!cmd->stop_src || tmp != cmd->stop_src)
+        err++;
+
+    if (err) {
+        return 1;
+    }
+
+
+    return 0;
+}
+
 static int apci_detach(comedi_device * dev)
 {
 	apci_info("comedi%d: remove\n", dev->minor);
-
+        if (dev->subdevices) {
+            for (int n = 0; n < dev->n_subdevices; n++) {
+                comedi_subdevice *s = &dev->subdevices[n];
+                subdev_private *spriv = s->private;
+                if (spriv) {
+                    apci_info("freeing private for subdevice %d\n", n);
+                    kfree(spriv);
+                }
+            }
+        }
 	return 0;
 }
 
@@ -189,11 +266,23 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 	
 	switch (data[0]) {
 	case INSN_CONFIG_DIO_OUTPUT:
-		s->io_bits |= 1 << chan;
-		break;
+            apci_debug("Setting all channels to output\n");
+            if ( chan ) {       /* Any value >= 1 is output */
+                s->io_bits = 0xFF;
+            } else {
+                s->io_bits = 0x00;
+            }
+
+            break;
 	case INSN_CONFIG_DIO_INPUT:
-		s->io_bits &= ~(1 << chan);
-		break;
+            apci_debug("Setting all channels to input\n");
+            if ( chan ) {       /* Any value >= 1 is output */
+                s->io_bits = 0xFF;
+            } else {
+                s->io_bits = 0x00;
+            }
+
+            break;
 	case INSN_CONFIG_DIO_QUERY:
 		data[1] = (s-> io_bits & (1 << chan)) ? COMEDI_OUTPUT : COMEDI_INPUT;
 		return insn->n;
@@ -203,6 +292,8 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 		break;
 	}
         apci_debug("io_bits is : %d\n", s->io_bits );
+        /* outb( s->base + 3, dev->iobase + s->group  ); */
+        apci_debug("Writing out the new thing\n");
 	//outw(s->io_bits,dev->iobase + APCI_DIO_CONFIG);
 
 	return insn->n;
