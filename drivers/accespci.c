@@ -29,10 +29,11 @@
 
 
 typedef struct apci_board_struct {
-	const char *name;
-	int ai_chans;
-	int ai_bits;
-	int have_dio;
+    const char *name;
+    int ai_chans;
+    int ai_bits;
+    int have_dio;
+    int dev_id;
 } apci_board;
 
 typedef enum {
@@ -49,15 +50,23 @@ typedef struct {
 
 
 
+
+
+#define PCI_VENDOR_ID_APCI 0x494f
+#define PCI_DIO_24 0x0c50
+#define PCI_DIO_48 0x0C60
+
 static const apci_board apci_boards[] = {
     {
     name:	"pci_dio_24",
+    dev_id:  PCI_DIO_24 ,
     ai_chans:16,
     ai_bits:	12,
     have_dio:1,
     },
     {
     name:	"pci_dio_48",
+    dev_id: PCI_DIO_48,
     ai_chans:8,
     ai_bits:	16,
     have_dio:0,
@@ -65,14 +74,10 @@ static const apci_board apci_boards[] = {
 };
 
 
-#define PCI_VENDOR_ID_APCI 0x494f
-#define PCI_DIO_24 0xc050
-
-
 
 static DEFINE_PCI_DEVICE_TABLE(apci_pci_table) = {
 	{PCI_VENDOR_ID_APCI, PCI_DIO_24, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
-	{PCI_VENDOR_ID_APCI, 0x0200, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{PCI_VENDOR_ID_APCI, PCI_DIO_48, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
 	{0}
 };
 
@@ -82,7 +87,9 @@ MODULE_DEVICE_TABLE(pci, apci_pci_table);
 #define thisboard ((const apci_board *)dev->board_ptr)
 
 
+
 typedef struct {
+    struct pci_dev *pdev;
     int data;
     struct pci_dev *pci_dev;
     lsampl_t ao_readback[2];
@@ -150,34 +157,61 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 	comedi_subdevice *s;
         subdev_private *spriv;
         struct pci_dev *pdev;
+        int index;
 
 	apci_info("comedi%d: \n", dev->minor);
 
 	//dev->board_ptr = apci_probe(dev, it);
 
-	dev->board_name = thisboard->name;
-
+	/* dev->board_name = thisboard->name; */
 
 	if (alloc_private(dev, sizeof(apci_private)) < 0)
  		return -ENOMEM;
 
-        /* for (pdev = pci_get_subsys(PCI_VENDOR_ID_APCI, PCI_DEVICE_ID_S626, */
-        /*                 PCI_SUBVENDOR_ID_S626, PCI_SUBDEVICE_ID_S626, NULL); */
-        /*         pdev != NULL; */
-        /*         pdev = pci_get_subsys(PCI_VENDOR_ID_APCI, PCI_DEVICE_ID_S626, */
-        /*                 PCI_SUBVENDOR_ID_S626, PCI_SUBDEVICE_ID_S626, pdev)) { */
-        /*         if (it->options[0] || it->options[1]) { */
-        /*                 if (pdev->bus->number == it->options[0] && */
-        /*                         PCI_SLOT(pdev->devfn) == it->options[1]) { */
-        /*                         /\* matches requested bus/slot *\/ */
-        /*                         break; */
-        /*                 } */
-        /*         } else { */
-        /*                 /\* no bus/slot specified *\/ */
-        /*                 break; */
-        /*         } */
-        /* } */
+        for (pdev = pci_get_device(PCI_ANY_ID, PCI_ANY_ID, NULL);
+                pdev != NULL;
+                pdev = pci_get_device(PCI_ANY_ID, PCI_ANY_ID, pdev)) {
+                // is it not a computer boards card?
+                /* apci_debug("looping: %x %x\n", pdev->vendor, pdev->device ); */
+                if (pdev->vendor != PCI_VENDOR_ID_APCI)
+                        continue;
+                // loop through cards supported by this driver
+                for (index = 0;
+                        index < sizeof apci_boards / sizeof(apci_board);
+                        index++) {
+                        if (apci_boards[index].dev_id != pdev->device)
+                                continue;
 
+                        // was a particular bus/slot requested?
+                        if (it->options[0] || it->options[1]) {
+                                // are we on the wrong bus/slot?
+                                if (pdev->bus->number != it->options[0] ||
+                                        PCI_SLOT(pdev->devfn) !=
+                                        it->options[1]) {
+                                        continue;
+                                }
+                        }
+                        dev->board_ptr = apci_boards + index;
+                        goto found;
+                }
+        }
+        printk("No supported ACCES I/O boards found\n");
+        return -EIO;
+        
+ found:
+
+        if (pdev == NULL) {
+            apci_error("apci_attach: Board not present!!!\n");
+            return -ENODEV;
+        }
+        dev->board_name = thisboard->name;
+
+        apci_info("Found a device: %s\n", thisboard->name );
+        devpriv->pdev = pdev;
+        /* if (comedi_pci_enable(pdev, thisboard->name)) { */
+        /*     apci_error("failed to enable PCI device and request regions\n"); */
+        /*     return -EIO; */
+        /* } */
 
 
         /* Setup private stuff */
@@ -416,6 +450,24 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 }
 
 
-COMEDI_INITCLEANUP(driver_apci);
+/* COMEDI_INITCLEANUP(driver_apci); */
+COMEDI_PCI_INITCLEANUP(driver_apci, apci_pci_table)
 
-// COMEDI_PCI_INITCLEANUP(driver_apci, apci_pci_table)
+
+        /* for (pdev = pci_get_subsys(PCI_VENDOR_ID_APCI, PCI_DIO_24, */
+        /*                 PCI_ANY_ID, PCI_ANY_ID, NULL); */
+        /*         pdev != NULL; */
+        /*         pdev = pci_get_subsys(PCI_VENDOR_ID_APCI, PCI_DIO_24, */
+        /*                 PCI_ANY_ID, PCI_ANY_ID, pdev)) { */
+        /*     apci_debug("Inside of loop\n"); */
+        /*         if (it->options[0] || it->options[1]) { */
+        /*                 if (pdev->bus->number == it->options[0] && */
+        /*                         PCI_SLOT(pdev->devfn) == it->options[1]) { */
+        /*                         /\* matches requested bus/slot *\/ */
+        /*                         break; */
+        /*                 } */
+        /*         } else { */
+        /*                 /\* no bus/slot specified *\/ */
+        /*                 break; */
+        /*         } */
+        /* }  */
