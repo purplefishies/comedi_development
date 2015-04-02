@@ -13,6 +13,22 @@
 #define APCI_AI_READ		0
 
 
+#define INPUT 1
+#define OUTPUT 0
+#define MODE_SEL_MODE1 1
+#define MODE_SEL_MODE0 0
+
+#define MODE_ACTIVE_AND_TRISTATE 1
+
+ 
+#define MODE1_HIGH 1
+#define MODE1_LOW  0
+#define MODE1 1,0
+
+#define MAKE_BYTE(A,B,C,D,E,F,G,H) ( ( (A&1) << 7 ) | ( (B&1) << 6 ) | ( (C&1) << 5 ) | ( (D&1) << 4 ) | \
+                                     ( (E&1) << 3 ) | ( (F&1) << 2 ) | ( (G&1) << 1 ) | ( (H&1) ) )
+
+
 typedef struct apci_board_struct {
 	const char *name;
 	int ai_chans;
@@ -68,7 +84,7 @@ typedef struct {
     int data;
     struct pci_dev *pci_dev;
     lsampl_t ao_readback[2];
-    int mode[2];
+    unsigned char mode[5];
 } apci_private;
 
 #define devpriv ((apci_private *)dev->private)
@@ -96,6 +112,16 @@ static int apci_dio_read_cmd(comedi_device * dev, comedi_subdevice * s );
 static int apci_dio_read_cmdtest(comedi_device * dev, comedi_subdevice * s,
         comedi_cmd * cmd);
 
+char *debug_byte( unsigned char byte ) 
+{
+    static char buf[9];
+    for( int i = 7 ; i >= 0 ; i -- ) { 
+        /* apci_debug("%d", (int)( byte & (1 << i ))); */
+        buf[7-i] = ( byte & ( 1 << i) ? '1' : '0' );
+    }
+    buf[8] = 0;
+    return buf;
+}
 
 static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 {
@@ -111,6 +137,19 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 	if (alloc_private(dev, sizeof(apci_private)) < 0)
  		return -ENOMEM;
 
+        /* Setup private stuff */
+        apci_debug("Size of devpriv->mode: %d\n", (int)(sizeof(devpriv->mode)) );
+        for ( int i = 0; i < sizeof(devpriv->mode) / sizeof(unsigned char ); i ++ ) {
+            devpriv->mode[i] = MAKE_BYTE( MODE_ACTIVE_AND_TRISTATE, MODE1_HIGH, MODE1_LOW, INPUT,INPUT,MODE_SEL_MODE1,INPUT,INPUT);
+            apci_debug("mode[%d]: %s\n", i, debug_byte( devpriv->mode[i] ) );
+        } 
+
+        /* if ((result = comedi_pci_enable(pdev, "s626")) < 0) { */
+        /*     printk("s626_attach: comedi_pci_enable fails\n"); */
+        /*     return -ENODEV; */
+        /* } */
+        /* resourceStart = pci_resource_start(devpriv->pdev, 0); */
+        /* devpriv->base_addr = ioremap(resourceStart, SIZEOF_ADDRESS_SPACE); */
 
 	if (alloc_subdevices(dev, 4) < 0)
 		return -ENOMEM;
@@ -293,6 +332,7 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 	comedi_insn * insn, lsampl_t * data)
 {
 	int chan = CR_CHAN(insn->chanspec);
+        int is_output = 0;
         subdev_private *spriv;
         apci_debug("Configuring...using channels: %d\n", chan );
 	
@@ -300,12 +340,12 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 	case INSN_CONFIG_DIO_OUTPUT:
             apci_debug("Setting all channels to output\n");
             s->io_bits = 0xFF;
-
+            is_output = 1;
             break;
 	case INSN_CONFIG_DIO_INPUT:
             apci_debug("Setting all channels to input: chan=%d\n", chan );
             s->io_bits = 0x00;
-
+            is_output = 0;
             break;
 	case INSN_CONFIG_DIO_QUERY:
 		data[1] = (s-> io_bits & (1 << chan)) ? COMEDI_OUTPUT : COMEDI_INPUT;
@@ -320,6 +360,11 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
         if ( spriv ) {
             apci_debug("Sending signal to Base + %d\n", (spriv->port + spriv->group*4 ));
         }
+
+        /* comedi_spin_lock_irqsave(&devpriv->lock, flags); */
+        /* outb( devpriv->base + spriv->group*4 + 1, ) */
+        /* comedi_spin_unlock_irqrestore(&devpriv->lock, flags); */
+        /* MAKE_BYTE( )  */
         /* outb( s->base + 3, dev->iobase + s->group  ); */
         /* apci_debug("Writing out the new thing\n"); */
 	//outw(s->io_bits,dev->iobase + APCI_DIO_CONFIG);
