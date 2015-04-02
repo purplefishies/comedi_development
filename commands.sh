@@ -29,12 +29,14 @@ function build_acces() {
     dir=$(pwd)
     cd ${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi/drivers
 
-    # make -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi -C /lib/modules/`uname -r`/build M=$(pwd) CC="gcc -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/include -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/inc-wrap"
-
-    make -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi -C /lib/modules/3.13.0-46-generic/build M=${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi CC="gcc -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/include -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/include -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/inc-wrap " modules
+    make -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi -C /lib/modules/$(uname -r)/build M=${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi CC="gcc -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/include -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/include -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/inc-wrap " modules
 
     cd ${dir}
 }
+
+
+    # make -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi -C /lib/modules/`uname -r`/build M=$(pwd) CC="gcc -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/include -I${COMEDI_DEV_ROOT}/${COMEDI_GIT}/inc-wrap"
+
 
 function refresh_build() {
     cd ${COMEDI_DEV_ROOT}/${COMEDI_GIT}
@@ -63,6 +65,7 @@ function load_custom_module() {
 function mload() {
     module=$1
     sudo insmod ${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi/comedi.ko comedi_num_legacy_minors=8
+    # sudo insmod ${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi/drivers/comedi_fc.ko 
     sudo insmod ${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi/drivers/${module}.ko 
     name=$(grep  -P "^\s*name:\s*" ${COMEDI_DEV_ROOT}/${COMEDI_GIT}/comedi/drivers/${module}.c | head -1 | perl -pne 's/.*"(\S+?)".*/$1/;')
     sudo /usr/sbin/comedi_config -v /dev/comedi0 ${name} 0,0,0
@@ -77,7 +80,7 @@ function mload() {
 
 function munload() {
     module=$1
-    if [ "${module}" == "" ] ; then 
+    if [ ! -z $module ] ; then 
         sudo rmmod $module comedi
     elif [ "$LAST_APCI_MODULE" != "" ] ; then
         sudo rmmod $LAST_APCI_MODULE comedi
@@ -85,7 +88,7 @@ function munload() {
         unset LAST_MODULE_NAME
     else
         unset LAST_APCI_MODULE
-        sudo rmmod comedi
+        sudo rmmod comedi_fc comedi
     fi
 }
 
