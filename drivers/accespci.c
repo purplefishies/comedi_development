@@ -20,8 +20,16 @@ typedef struct apci_board_struct {
 	int have_dio;
 } apci_board;
 
+typedef enum {
+    PORT_A = 0,
+    PORT_B = 1,
+    PORT_C = 2
+} PORT;
+
 typedef struct {
-    int ofs;
+    int offset;
+    PORT port;
+    int group;
 } subdev_private;
 
 
@@ -57,13 +65,10 @@ MODULE_DEVICE_TABLE(pci, apci_pci_table);
 
 
 typedef struct {
-	int data;
-
-	
-	struct pci_dev *pci_dev;
-
-	
-	lsampl_t ao_readback[2];
+    int data;
+    struct pci_dev *pci_dev;
+    lsampl_t ao_readback[2];
+    int mode[2];
 } apci_private;
 
 #define devpriv ((apci_private *)dev->private)
@@ -95,7 +100,7 @@ static int apci_dio_read_cmdtest(comedi_device * dev, comedi_subdevice * s,
 static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 {
 	comedi_subdevice *s;
-
+        subdev_private *spriv;
 	apci_info("comedi%d: \n", dev->minor);
 
 	//dev->board_ptr = apci_probe(dev, it);
@@ -113,29 +118,40 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
         /*--------------------------------  A  --------------------------------*/
 	s = dev->subdevices + 0;
 	
-	s->type = COMEDI_SUBD_DIO;
-	s->subdev_flags = SDF_READABLE | SDF_WRITABLE;
-	s->n_chan = 8;
-	s->maxdata = 1;
-	s->range_table = &range_digital;
-        s->insn_bits = apci_dio_insn_bits;
-        s->insn_config = apci_dio_insn_config;
-        s->private = kmalloc(sizeof(subdev_private), GFP_KERNEL );
-        if (!s->private) {
+	s->type          = COMEDI_SUBD_DIO;
+	s->subdev_flags  = SDF_READABLE | SDF_WRITABLE;
+	s->n_chan        = 8;
+	s->maxdata       = 1;
+	s->range_table   = &range_digital;
+        s->insn_bits     = apci_dio_insn_bits;
+        s->insn_config   = apci_dio_insn_config;
+        spriv = (subdev_private*)kmalloc(sizeof(subdev_private), GFP_KERNEL );
+        if (!spriv) {
             apci_error("comedi%d: error! out of memory!\n", dev->minor);
             return -ENOMEM;
         }
+        spriv->port  = PORT_A;
+        spriv->group = 0;
+        s->private = spriv;
 
         /*--------------------------------  B  --------------------------------*/
 	s = dev->subdevices + 1;
 	
-	s->type = COMEDI_SUBD_DIO;
-	s->subdev_flags = SDF_READABLE | SDF_WRITABLE;
-	s->n_chan = 8;
-	s->maxdata = 1;
-	s->range_table = &range_digital;
-        s->insn_bits = apci_dio_insn_bits;
-        s->insn_config = apci_dio_insn_config;
+	s->type          = COMEDI_SUBD_DIO;
+	s->subdev_flags  = SDF_READABLE | SDF_WRITABLE;
+	s->n_chan        = 8;
+	s->maxdata       = 1;
+	s->range_table   = &range_digital;
+        s->insn_bits     = apci_dio_insn_bits;
+        s->insn_config   = apci_dio_insn_config;
+        spriv = (subdev_private*)kmalloc(sizeof(subdev_private), GFP_KERNEL );
+        if (!spriv) {
+            apci_error("comedi%d: error! out of memory!\n", dev->minor);
+            return -ENOMEM;
+        }
+        spriv->port  = PORT_B;
+        spriv->group = 0;
+        s->private = spriv;
         
         /*--------------------------------  Chi  --------------------------------*/
 	s = dev->subdevices + 2;
@@ -147,6 +163,14 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 	s->range_table = &range_digital;
         s->insn_bits = apci_dio_insn_bits;
         s->insn_config = apci_dio_insn_config;	
+        spriv = (subdev_private*)kmalloc(sizeof(subdev_private), GFP_KERNEL );
+        if (!spriv) {
+            apci_error("comedi%d: error! out of memory!\n", dev->minor);
+            return -ENOMEM;
+        }
+        spriv->port  = PORT_C;
+        spriv->group = 0;
+        s->private = spriv;
 
         /*--------------------------------  Clo  --------------------------------*/
 	s = dev->subdevices + 3;
@@ -158,6 +182,15 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 	s->range_table = &range_digital;
         s->insn_bits = apci_dio_insn_bits;
         s->insn_config = apci_dio_insn_config;	
+        spriv = (subdev_private*)kmalloc(sizeof(subdev_private), GFP_KERNEL );
+        if (!spriv) {
+            apci_error("comedi%d: error! out of memory!\n", dev->minor);
+            return -ENOMEM;
+        }
+        spriv->port  = PORT_C;
+        spriv->group = 0;
+        s->private = spriv;
+
         s->do_cmd      = apci_dio_read_cmd;
         s->do_cmdtest  = apci_dio_read_cmdtest;
 
@@ -260,6 +293,7 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 	comedi_insn * insn, lsampl_t * data)
 {
 	int chan = CR_CHAN(insn->chanspec);
+        subdev_private *spriv;
         apci_debug("Configuring...using channels: %d\n", chan );
 	
 	switch (data[0]) {
@@ -282,8 +316,12 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 		break;
 	}
         apci_debug("io_bits is : %d\n", s->io_bits );
+        spriv = s->private;
+        if ( spriv ) {
+            apci_debug("Sending signal to Base + %d\n", (spriv->port + spriv->group*4 ));
+        }
         /* outb( s->base + 3, dev->iobase + s->group  ); */
-        apci_debug("Writing out the new thing\n");
+        /* apci_debug("Writing out the new thing\n"); */
 	//outw(s->io_bits,dev->iobase + APCI_DIO_CONFIG);
 
 	return insn->n;
