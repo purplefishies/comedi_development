@@ -1,10 +1,9 @@
 
 
 #include <linux/comedidev.h>
-#include "apci_common.h"
-
 #include <linux/pci.h>		
-
+#include "apci_common.h"
+#include "comedi_pci.h"
 
 
 #define APCI_SIZE 0
@@ -66,10 +65,13 @@ static const apci_board apci_boards[] = {
 };
 
 
+#define PCI_VENDOR_ID_APCI 0x494f
+#define PCI_DIO_24 0xc050
 
-#define PCI_VENDOR_ID_APCI 0xdafe
+
+
 static DEFINE_PCI_DEVICE_TABLE(apci_pci_table) = {
-	{PCI_VENDOR_ID_APCI, 0x0100, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{PCI_VENDOR_ID_APCI, PCI_DIO_24, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
 	{PCI_VENDOR_ID_APCI, 0x0200, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
 	{0}
 };
@@ -112,6 +114,26 @@ static int apci_dio_read_cmd(comedi_device * dev, comedi_subdevice * s );
 static int apci_dio_read_cmdtest(comedi_device * dev, comedi_subdevice * s,
         comedi_cmd * cmd);
 
+char debug_port( PORT port )
+{
+    char retval;
+    switch (port) {
+    case PORT_A:
+        retval = 'A';
+        break;
+    case PORT_B:
+        retval = 'B';
+        break;
+    case PORT_C:
+        retval = 'C';
+        break;
+    default:
+        retval = '_';
+        break;
+    }
+    return retval;
+}
+
 char *debug_byte( unsigned char byte ) 
 {
     static char buf[9];
@@ -127,6 +149,8 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 {
 	comedi_subdevice *s;
         subdev_private *spriv;
+        struct pci_dev *pdev;
+
 	apci_info("comedi%d: \n", dev->minor);
 
 	//dev->board_ptr = apci_probe(dev, it);
@@ -136,6 +160,25 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 
 	if (alloc_private(dev, sizeof(apci_private)) < 0)
  		return -ENOMEM;
+
+        /* for (pdev = pci_get_subsys(PCI_VENDOR_ID_APCI, PCI_DEVICE_ID_S626, */
+        /*                 PCI_SUBVENDOR_ID_S626, PCI_SUBDEVICE_ID_S626, NULL); */
+        /*         pdev != NULL; */
+        /*         pdev = pci_get_subsys(PCI_VENDOR_ID_APCI, PCI_DEVICE_ID_S626, */
+        /*                 PCI_SUBVENDOR_ID_S626, PCI_SUBDEVICE_ID_S626, pdev)) { */
+        /*         if (it->options[0] || it->options[1]) { */
+        /*                 if (pdev->bus->number == it->options[0] && */
+        /*                         PCI_SLOT(pdev->devfn) == it->options[1]) { */
+        /*                         /\* matches requested bus/slot *\/ */
+        /*                         break; */
+        /*                 } */
+        /*         } else { */
+        /*                 /\* no bus/slot specified *\/ */
+        /*                 break; */
+        /*         } */
+        /* } */
+
+
 
         /* Setup private stuff */
         apci_debug("Size of devpriv->mode: %d\n", (int)(sizeof(devpriv->mode)) );
@@ -234,7 +277,6 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
         s->do_cmdtest  = apci_dio_read_cmdtest;
 
         /* Done */
-        apci_info("Foo\n");
 	apci_debug("attached\n");
 
 	return 0;
@@ -334,16 +376,17 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 	int chan = CR_CHAN(insn->chanspec);
         int is_output = 0;
         subdev_private *spriv;
+        spriv = s->private;
         apci_debug("Configuring...using channels: %d\n", chan );
 	
 	switch (data[0]) {
 	case INSN_CONFIG_DIO_OUTPUT:
-            apci_debug("Setting all channels to output\n");
+            apci_debug("Setting all channels of Group %d Port %c to output\n", spriv->group,debug_port( spriv->port) );
             s->io_bits = 0xFF;
             is_output = 1;
             break;
 	case INSN_CONFIG_DIO_INPUT:
-            apci_debug("Setting all channels to input: chan=%d\n", chan );
+            apci_debug("Setting all channels of Group %d Port %c to input\n",  spriv->group, debug_port( spriv->port ) );
             s->io_bits = 0x00;
             is_output = 0;
             break;
@@ -355,7 +398,7 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 		return -EINVAL;
 		break;
 	}
-        apci_debug("io_bits is : %d\n", s->io_bits );
+
         spriv = s->private;
         if ( spriv ) {
             apci_debug("Sending signal to Base + %d\n", (spriv->port + spriv->group*4 ));
