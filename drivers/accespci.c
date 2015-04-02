@@ -256,8 +256,6 @@ static int apci_dio_insn_bits(comedi_device * dev, comedi_subdevice * s,
 	return 2;
 }
 
-
-
 static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 	comedi_insn * insn, lsampl_t * data)
 {
@@ -267,20 +265,12 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 	switch (data[0]) {
 	case INSN_CONFIG_DIO_OUTPUT:
             apci_debug("Setting all channels to output\n");
-            if ( chan ) {       /* Any value >= 1 is output */
-                s->io_bits = 0xFF;
-            } else {
-                s->io_bits = 0x00;
-            }
+            s->io_bits = 0xFF;
 
             break;
 	case INSN_CONFIG_DIO_INPUT:
-            apci_debug("Setting all channels to input\n");
-            if ( chan ) {       /* Any value >= 1 is output */
-                s->io_bits = 0xFF;
-            } else {
-                s->io_bits = 0x00;
-            }
+            apci_debug("Setting all channels to input: chan=%d\n", chan );
+            s->io_bits = 0x00;
 
             break;
 	case INSN_CONFIG_DIO_QUERY:
