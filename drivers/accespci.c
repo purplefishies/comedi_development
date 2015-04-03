@@ -60,6 +60,7 @@ typedef struct {
     unsigned char mode[5];
     void *dio_base;
     int got_regions;
+    spinlock_t lock;
     int plx_region_start;
     int plx_region_length;
     io_region_t regions[6];
@@ -164,6 +165,27 @@ char *debug_byte( unsigned char byte )
     return buf;
 }
 
+
+void cleanup_io_regions( comedi_device *dev )
+{
+
+    for (int i = 0; i < 6; i ++) {
+        if (devpriv->regions[i].start == 0) {
+            continue; /* invalid region */
+        }
+        if (devpriv->regions[i].flags & IORESOURCE_IO) {
+            release_region(devpriv->regions[i].start, devpriv->regions[i].length);
+            apci_debug("Releasing bar=%d,region=%#x,len=%#x\n", i, devpriv->regions[i].start, devpriv->regions[i].length );
+        } else {
+            iounmap(devpriv->regions[i].mapped_address);
+            apci_debug("Unmapping bar=%d,region=%#x,mapped=%lx\n", i, devpriv->regions[i].start, (long int)devpriv->regions[i].mapped_address );
+            release_mem_region(devpriv->regions[i].start, devpriv->regions[i].length);
+            apci_debug("Releasing mem bar=%d,region=%#x,len=%#x\n", i, devpriv->regions[i].start, devpriv->regions[i].length );
+        }
+    }
+}
+
+
 static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 {
 	comedi_subdevice *s;
@@ -172,6 +194,7 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
         int index;
         resource_size_t resourceStart;
         int plx_bar;
+        int result;
         struct resource *presource;
 
 	apci_info("comedi%d: \n", dev->minor);
@@ -221,6 +244,9 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
         /* } */
         dev->board_name = thisboard->name;
 
+        spin_lock_init(&devpriv->lock);
+
+
         apci_info("Found a device: %s\n", thisboard->name );
 
         devpriv->pdev = pdev;
@@ -241,7 +267,7 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
         apci_debug("Start=%#x, length=%#x\n", devpriv->plx_region_start, devpriv->plx_region_length );        
 
         /* Now request the region and also clean it up */
-        presource = request_region(devpriv->plx_region_start, devpriv->plx_region_length, "apci");
+        presource = request_region(devpriv->plx_region_start, devpriv->plx_region_length, "accespci");
         if ( !presource ) {
             printk("I/O port conflict\n");
             return -EIO;
@@ -250,16 +276,15 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
         devpriv->regions[2].start   = pci_resource_start(pdev, 2);
         devpriv->regions[2].length  = pci_resource_len(pdev, 2);
         devpriv->regions[2].flags   = pci_resource_flags(pdev, 2);
-        /* devpriv->regions[2].length  = devpriv->regions[2].end - devpriv->regions[2].start + 1; */
-        /* devpriv->irq                = pdev->irq; */
-        /* devpriv->irq_capable        = 1; */
+
+
         apci_debug("bar[%d], start=%#x,len=%#x\n", 2,devpriv->regions[2].start, devpriv->regions[2].length );
         if (devpriv->regions[2].flags & IORESOURCE_IO) {
             apci_debug("requesting io region start=%08x,len=%d\n", devpriv->regions[2].start, devpriv->regions[2].length );
-            presource = request_region(devpriv->regions[2].start, devpriv->regions[2].length, "apci");
+            presource = request_region(devpriv->regions[2].start, devpriv->regions[2].length, "accespci");
         } else {
             apci_debug("requesting mem region start=%08x,len=%d\n", devpriv->regions[2].start, devpriv->regions[2].length );
-            presource = request_mem_region(devpriv->regions[2].start, devpriv->regions[2].length, "apci");
+            presource = request_mem_region(devpriv->regions[2].start, devpriv->regions[2].length, "accespci");
             if (presource != NULL) {
                 apci_debug("Remapping address start=%08x,len=%d\n", devpriv->regions[2].start, devpriv->regions[2].length );
                 devpriv->regions[2].mapped_address = ioremap(devpriv->regions[2].start, devpriv->regions[2].length);
@@ -267,45 +292,18 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
         }
         if ( !presource ) {
             apci_error("I/O port conflict\n");
+            cleanup_io_regions( dev );
             return -EIO;
         } else {
             devpriv->regions[2].enabled = 1;
         }
+        /* Don't need the prior if we can use the comedi_pci_enable */
 
-
-        /* apci_debug("regions[2].start = %08x\n", devpriv->regions[2].start ); */
-        /* apci_debug("regions[2].end   = %08x\n", devpriv->regions[2].end ); */
-        /* apci_debug("regions[2].length= %08x\n", devpriv->regions[2].length ); */
-        /* apci_debug("regions[2].flags = %lx\n", devpriv->regions[2].flags ); */
-        /* apci_debug("irq = %d\n", devpriv->irq ); */
-
-
-
-        /* devpriv->plx_region_end        = pci_resource_end(pdev, plx_bar); */
-        /* if( ! devpriv->plx_region_end ) { */
-        /*     apci_error("Invalid bar %d on end", plx_bar ); */
+        /* if ((result = comedi_pci_enable(pdev, "accespci")) < 0) { */
+        /*     printk("apci_attach: comedi_pci_enable fails\n"); */
+        /*     cleanup_io_regions( dev ); */
         /*     return -ENODEV; */
         /* } */
-
-        /* if (comedi_pci_enable(pdev, thisboard->name)) { */
-        /*     apci_error("failed to enable PCI device and request regions\n"); */
-        /*     return -EIO; */
-        /* } */
-        /* devpriv->got_regions = 1; */
-
-        /* resourceStart = pci_resource_start(pdev, 2 ); */
-
-        /* devpriv->dio_base = pci_resource_start(devpriv->pdev, (pci_resource_len(devpriv->pdev, 2) ? 2 : 1)); */
-        /* devpriv->dio_base = ioremap(resourceStart, SIZEOF_ADDRESS_SPACE); */
-        /* devpriv->dio_base =  */
-
-        /* if (devpriv->dio_base == NULL) { */
-        /*         apci_error("apci_attach: IOREMAP failed\n"); */
-        /*         return -ENODEV; */
-        /* } else { */
-        /*     apci_debug("Got address of %08x\n", (int)devpriv->dio_base ); */
-        /* } */
-
 
         /* Setup private stuff */
         apci_debug("Size of devpriv->mode: %d\n", (int)(sizeof(devpriv->mode)) );
@@ -313,13 +311,6 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
             devpriv->mode[i] = MAKE_BYTE( MODE_ACTIVE_AND_TRISTATE, MODE0_HIGH, MODE0_LOW, INPUT,INPUT,MODE_SEL_MODE0,INPUT,INPUT);
             apci_debug("mode[%d]: %s\n", i, debug_byte( devpriv->mode[i] ) );
         } 
-
-        /* if ((result = comedi_pci_enable(pdev, "s626")) < 0) { */
-        /*     printk("s626_attach: comedi_pci_enable fails\n"); */
-        /*     return -ENODEV; */
-        /* } */
-        /* resourceStart = pci_resource_start(devpriv->pdev, 0); */
-        /* devpriv->base_addr = ioremap(resourceStart, SIZEOF_ADDRESS_SPACE); */
 
 	if (alloc_subdevices(dev, 4) < 0)
 		return -ENOMEM;
@@ -474,12 +465,13 @@ static int apci_detach(comedi_device * dev)
             release_region( devpriv->plx_region_start, devpriv->plx_region_length);
         }
 
-        for ( int i = 0; i < sizeof(devpriv->regions) / sizeof(io_region_t ); i ++ ) { 
-            if ( devpriv->regions[i].enabled ) {
-                apci_debug("Releasing region=%#x,len=%#x\n", devpriv->regions[i].start, devpriv->regions[i].length );
-                release_region( devpriv->regions[i].start, devpriv->regions[i].length );
-            }
-        }
+        cleanup_io_regions( dev );
+        /* for ( int i = 0; i < sizeof(devpriv->regions) / sizeof(io_region_t ); i ++ ) {  */
+        /*     if ( devpriv->regions[i].enabled ) { */
+        /*         apci_debug("Releasing bar=%d,region=%#x,len=%#x\n", i, devpriv->regions[i].start, devpriv->regions[i].length ); */
+        /*         release_region( devpriv->regions[i].start, devpriv->regions[i].length ); */
+        /*     } */
+        /* } */
 
         if (dev->subdevices) {
             for (int n = 0; n < dev->n_subdevices; n++) {
@@ -518,11 +510,39 @@ static int apci_dio_insn_bits(comedi_device * dev, comedi_subdevice * s,
 	return 2;
 }
 
+unsigned char calculate_direction( subdev_private *spriv, unsigned char omode, unsigned char bits )
+{
+    unsigned char retval;
+    unsigned char incval;
+    unsigned char exclval;
+    switch ( spriv->port ) {
+    case PORT_A:
+        incval   = MAKE_BYTE(0,0,0,bits,0,0,0,0);
+        exclval  = MAKE_BYTE(1,1,1,bits,1,1,1,1);
+        break;
+    case PORT_B:
+        incval   = MAKE_BYTE(0,0,0,0,0,0,bits,0);
+        exclval  = MAKE_BYTE(1,1,1,1,1,1,bits,1);
+        break;
+    case PORT_C:
+        incval   = MAKE_BYTE(0,0,0,0,bits,0,0,0);
+        exclval  = MAKE_BYTE(1,1,1,1,bits,1,1,1);
+        break;
+    default:
+        incval = 0xff;
+    }
+    retval = (exclval & omode) | ( incval ); 
+
+    return retval;
+}
+
+
 static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 	comedi_insn * insn, lsampl_t * data)
 {
 	int chan = CR_CHAN(insn->chanspec);
         int is_output = 0;
+        unsigned long flags;
         subdev_private *spriv;
         spriv = s->private;
         apci_debug("Configuring...using channels: %d\n", chan );
@@ -530,7 +550,7 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 	switch (data[0]) {
 	case INSN_CONFIG_DIO_OUTPUT:
             apci_debug("Setting all channels of Group %d Port %c to output\n", spriv->group,debug_port( spriv->port) );
-            s->io_bits = 0xFF;
+            s->io_bits = 0xff;
             is_output = 1;
             break;
 	case INSN_CONFIG_DIO_INPUT:
@@ -552,10 +572,16 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
             apci_debug("Sending signal to Base + %d\n", (spriv->port + spriv->group*4 ));
         }
 
-        /* comedi_spin_lock_irqsave(&devpriv->lock, flags); */
+        comedi_spin_lock_irqsave(&devpriv->lock, flags);
+
+        apci_debug("Sending write to  + %#x\n", devpriv->regions[2].start + spriv->group*4 + 3 );
+        apci_debug("Before: %s\n", debug_byte(devpriv->mode[spriv->group]) );
+        /* devpriv->mode[spriv->group] = devpriv->mode[spriv->group] & calculate_direction( spriv, ~s->io_bits ); */
+        devpriv->mode[spriv->group] = calculate_direction( spriv, devpriv->mode[spriv->group], ~s->io_bits );
+        apci_debug("After:  %s\n", debug_byte(devpriv->mode[spriv->group]) );
         /* outb( devpriv->base + spriv->group*4 + 1, ) */
-        /* comedi_spin_unlock_irqrestore(&devpriv->lock, flags); */
-        /* MAKE_BYTE( )  */
+        comedi_spin_unlock_irqrestore(&devpriv->lock, flags);
+
         /* outb( s->base + 3, dev->iobase + s->group  ); */
         /* apci_debug("Writing out the new thing\n"); */
 	//outw(s->io_bits,dev->iobase + APCI_DIO_CONFIG);
@@ -564,6 +590,6 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 }
 
 
-/* COMEDI_INITCLEANUP(driver_apci); */
+
 COMEDI_PCI_INITCLEANUP(driver_apci, apci_pci_table)
 
