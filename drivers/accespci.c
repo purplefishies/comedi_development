@@ -44,9 +44,28 @@ typedef enum {
 } PORT;
 
 typedef struct {
+    
+
+} io_region_t;
+
+
+typedef struct {
+    struct pci_dev *pdev;
+    int data;
+    struct pci_dev *pci_dev;
+    lsampl_t ao_readback[2];
+    unsigned char mode[5];
+    void *dio_base;
+    int got_regions;
+    int plx_region_start;
+    int plx_region_length;
+} apci_private;
+
+typedef struct {
     int offset;
     PORT port;
     int group;
+
 } subdev_private;
 
 
@@ -87,15 +106,6 @@ MODULE_DEVICE_TABLE(pci, apci_pci_table);
 #define thisboard ((const apci_board *)dev->board_ptr)
 
 
-typedef struct {
-    struct pci_dev *pdev;
-    int data;
-    struct pci_dev *pci_dev;
-    lsampl_t ao_readback[2];
-    unsigned char mode[5];
-    void *dio_base;
-    int got_regions;
-} apci_private;
 
 #define devpriv ((apci_private *)dev->private)
 
@@ -160,12 +170,11 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
         struct pci_dev *pdev;
         int index;
         resource_size_t resourceStart;
+        int plx_bar;
 
 	apci_info("comedi%d: \n", dev->minor);
 
 	//dev->board_ptr = apci_probe(dev, it);
-
-	/* dev->board_name = thisboard->name; */
 
 	if (alloc_private(dev, sizeof(apci_private)) < 0)
  		return -ENOMEM;
@@ -211,6 +220,30 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
         apci_info("Found a device: %s\n", thisboard->name );
 
         devpriv->pdev = pdev;
+
+        if (pci_resource_flags(pdev, 0) & IORESOURCE_IO) {
+            plx_bar = 0;
+        } else {
+            plx_bar = 1;
+        }
+
+        apci_debug("Using bar=%d\n",plx_bar );
+        devpriv->plx_region_start      = pci_resource_start(pdev, plx_bar);
+        if( ! devpriv->plx_region_start ) {
+            apci_error("Invalid bar %d on start ", plx_bar );
+            return -ENODEV;
+        }
+        devpriv->plx_region_length     = pci_resource_len(pdev, plx_bar );
+        apci_debug("Start=%#x, length=%#x\n", devpriv->plx_region_start, devpriv->plx_region_length );        
+
+
+        /* devpriv->plx_region_end        = pci_resource_end(pdev, plx_bar); */
+        /* if( ! devpriv->plx_region_end ) { */
+        /*     apci_error("Invalid bar %d on end", plx_bar ); */
+        /*     return -ENODEV; */
+        /* } */
+
+
         /* if (comedi_pci_enable(pdev, thisboard->name)) { */
         /*     apci_error("failed to enable PCI device and request regions\n"); */
         /*     return -EIO; */
@@ -237,7 +270,6 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
             devpriv->mode[i] = MAKE_BYTE( MODE_ACTIVE_AND_TRISTATE, MODE0_HIGH, MODE0_LOW, INPUT,INPUT,MODE_SEL_MODE0,INPUT,INPUT);
             apci_debug("mode[%d]: %s\n", i, debug_byte( devpriv->mode[i] ) );
         } 
-
 
         /* if ((result = comedi_pci_enable(pdev, "s626")) < 0) { */
         /*     printk("s626_attach: comedi_pci_enable fails\n"); */
