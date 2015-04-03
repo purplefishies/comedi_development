@@ -18,11 +18,12 @@
 #define MODE_SEL_MODE0 0
 
 #define MODE_ACTIVE_AND_TRISTATE 1
-
+#define SIZEOF_ADDRESS_SPACE  0x20
  
 #define MODE1_HIGH 1
 #define MODE1_LOW  0
-#define MODE1 1,0
+#define MODE0_HIGH 0
+#define MODE0_LOW  0
 
 #define MAKE_BYTE(A,B,C,D,E,F,G,H) ( ( (A&1) << 7 ) | ( (B&1) << 6 ) | ( (C&1) << 5 ) | ( (D&1) << 4 ) | \
                                      ( (E&1) << 3 ) | ( (F&1) << 2 ) | ( (G&1) << 1 ) | ( (H&1) ) )
@@ -54,7 +55,7 @@ typedef struct {
 
 #define PCI_VENDOR_ID_APCI 0x494f
 #define PCI_DIO_24 0x0c50
-#define PCI_DIO_48 0x0C60
+#define PCI_DIO_48 0x0c60
 
 static const apci_board apci_boards[] = {
     {
@@ -83,9 +84,7 @@ static DEFINE_PCI_DEVICE_TABLE(apci_pci_table) = {
 
 MODULE_DEVICE_TABLE(pci, apci_pci_table);
 
-
 #define thisboard ((const apci_board *)dev->board_ptr)
-
 
 
 typedef struct {
@@ -94,6 +93,8 @@ typedef struct {
     struct pci_dev *pci_dev;
     lsampl_t ao_readback[2];
     unsigned char mode[5];
+    void *dio_base;
+    int got_regions;
 } apci_private;
 
 #define devpriv ((apci_private *)dev->private)
@@ -158,6 +159,7 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
         subdev_private *spriv;
         struct pci_dev *pdev;
         int index;
+        resource_size_t resourceStart;
 
 	apci_info("comedi%d: \n", dev->minor);
 
@@ -200,26 +202,42 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
         
  found:
 
-        if (pdev == NULL) {
-            apci_error("apci_attach: Board not present!!!\n");
-            return -ENODEV;
-        }
+        /* if (pdev == NULL) { */
+        /*     apci_error("apci_attach: Board not present!!!\n"); */
+        /*     return -ENODEV; */
+        /* } */
         dev->board_name = thisboard->name;
 
         apci_info("Found a device: %s\n", thisboard->name );
+
         devpriv->pdev = pdev;
         /* if (comedi_pci_enable(pdev, thisboard->name)) { */
         /*     apci_error("failed to enable PCI device and request regions\n"); */
         /*     return -EIO; */
+        /* } */
+        /* devpriv->got_regions = 1; */
+
+        /* resourceStart = pci_resource_start(pdev, 2 ); */
+
+        /* devpriv->dio_base = pci_resource_start(devpriv->pdev, (pci_resource_len(devpriv->pdev, 2) ? 2 : 1)); */
+        /* devpriv->dio_base = ioremap(resourceStart, SIZEOF_ADDRESS_SPACE); */
+        /* devpriv->dio_base =  */
+
+        /* if (devpriv->dio_base == NULL) { */
+        /*         apci_error("apci_attach: IOREMAP failed\n"); */
+        /*         return -ENODEV; */
+        /* } else { */
+        /*     apci_debug("Got address of %08x\n", (int)devpriv->dio_base ); */
         /* } */
 
 
         /* Setup private stuff */
         apci_debug("Size of devpriv->mode: %d\n", (int)(sizeof(devpriv->mode)) );
         for ( int i = 0; i < sizeof(devpriv->mode) / sizeof(unsigned char ); i ++ ) {
-            devpriv->mode[i] = MAKE_BYTE( MODE_ACTIVE_AND_TRISTATE, MODE1_HIGH, MODE1_LOW, INPUT,INPUT,MODE_SEL_MODE1,INPUT,INPUT);
+            devpriv->mode[i] = MAKE_BYTE( MODE_ACTIVE_AND_TRISTATE, MODE0_HIGH, MODE0_LOW, INPUT,INPUT,MODE_SEL_MODE0,INPUT,INPUT);
             apci_debug("mode[%d]: %s\n", i, debug_byte( devpriv->mode[i] ) );
         } 
+
 
         /* if ((result = comedi_pci_enable(pdev, "s626")) < 0) { */
         /*     printk("s626_attach: comedi_pci_enable fails\n"); */
@@ -367,7 +385,19 @@ static int apci_dio_read_cmdtest(comedi_device * dev, comedi_subdevice * s,
 
 static int apci_detach(comedi_device * dev)
 {
-	apci_info("comedi%d: remove\n", dev->minor);
+        if (devpriv) {
+            if (devpriv->pdev) {
+                if (devpriv->got_regions) {
+                    comedi_pci_disable(devpriv->pci_dev);
+                }
+                pci_dev_put(devpriv->pdev);
+            }
+        }
+
+        if (devpriv->dio_base ) {
+            iounmap( devpriv->dio_base );
+        }
+
         if (dev->subdevices) {
             for (int n = 0; n < dev->n_subdevices; n++) {
                 comedi_subdevice *s = &dev->subdevices[n];
@@ -378,6 +408,7 @@ static int apci_detach(comedi_device * dev)
                 }
             }
         }
+        apci_debug("Detached\n");
 	return 0;
 }
 
@@ -453,21 +484,3 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 /* COMEDI_INITCLEANUP(driver_apci); */
 COMEDI_PCI_INITCLEANUP(driver_apci, apci_pci_table)
 
-
-        /* for (pdev = pci_get_subsys(PCI_VENDOR_ID_APCI, PCI_DIO_24, */
-        /*                 PCI_ANY_ID, PCI_ANY_ID, NULL); */
-        /*         pdev != NULL; */
-        /*         pdev = pci_get_subsys(PCI_VENDOR_ID_APCI, PCI_DIO_24, */
-        /*                 PCI_ANY_ID, PCI_ANY_ID, pdev)) { */
-        /*     apci_debug("Inside of loop\n"); */
-        /*         if (it->options[0] || it->options[1]) { */
-        /*                 if (pdev->bus->number == it->options[0] && */
-        /*                         PCI_SLOT(pdev->devfn) == it->options[1]) { */
-        /*                         /\* matches requested bus/slot *\/ */
-        /*                         break; */
-        /*                 } */
-        /*         } else { */
-        /*                 /\* no bus/slot specified *\/ */
-        /*                 break; */
-        /*         } */
-        /* }  */
