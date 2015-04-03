@@ -171,6 +171,7 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
         int index;
         resource_size_t resourceStart;
         int plx_bar;
+        struct resource *presource;
 
 	apci_info("comedi%d: \n", dev->minor);
 
@@ -178,6 +179,8 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
 
 	if (alloc_private(dev, sizeof(apci_private)) < 0)
  		return -ENOMEM;
+
+        apci_debug("Initial: Start=%#x, length=%#x\n", devpriv->plx_region_start, devpriv->plx_region_length );        
 
         for (pdev = pci_get_device(PCI_ANY_ID, PCI_ANY_ID, NULL);
                 pdev != NULL;
@@ -236,13 +239,19 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
         devpriv->plx_region_length     = pci_resource_len(pdev, plx_bar );
         apci_debug("Start=%#x, length=%#x\n", devpriv->plx_region_start, devpriv->plx_region_length );        
 
+        /* Now request the region and also clean it up */
+        presource = request_region(devpriv->plx_region_start, devpriv->plx_region_length, "apci");
+        if ( !presource ) {
+            printk("I/O port conflict\n");
+            return -EIO;
+        }
+
 
         /* devpriv->plx_region_end        = pci_resource_end(pdev, plx_bar); */
         /* if( ! devpriv->plx_region_end ) { */
         /*     apci_error("Invalid bar %d on end", plx_bar ); */
         /*     return -ENODEV; */
         /* } */
-
 
         /* if (comedi_pci_enable(pdev, thisboard->name)) { */
         /*     apci_error("failed to enable PCI device and request regions\n"); */
@@ -426,8 +435,9 @@ static int apci_detach(comedi_device * dev)
             }
         }
 
-        if (devpriv->dio_base ) {
-            iounmap( devpriv->dio_base );
+        if (devpriv->plx_region_start ) {
+            apci_debug("Releasing plx_region_start=%#x,len=%#x", devpriv->plx_region_start, devpriv->plx_region_length );
+            release_region( devpriv->plx_region_start, devpriv->plx_region_length);
         }
 
         if (dev->subdevices) {
