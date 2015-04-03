@@ -192,9 +192,8 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
         subdev_private *spriv;
         struct pci_dev *pdev;
         int index;
-        resource_size_t resourceStart;
         int plx_bar;
-        int result;
+
         struct resource *presource;
 
 	apci_info("comedi%d: \n", dev->minor);
@@ -490,6 +489,7 @@ static int apci_detach(comedi_device * dev)
 static int apci_dio_insn_bits(comedi_device * dev, comedi_subdevice * s,
 	comedi_insn * insn, lsampl_t * data)
 {
+        subdev_private *spriv = s->private;
 
         apci_debug("Writing/Reading\n");
 	if (insn->n != 2)
@@ -497,14 +497,23 @@ static int apci_dio_insn_bits(comedi_device * dev, comedi_subdevice * s,
 
 	
 	if (data[0]) {
-		s->state &= ~data[0];
-		s->state |= data[0] & data[1];
-		//outw(s->state,dev->iobase + APCI_DIO);
-	}
 
-	
+            apci_debug("io_bits: %s\n",debug_byte( s->io_bits ));
+            if ( (s->io_bits & data[0]) != data[0] ) 
+                return -EIO;
+
+            s->state &= ~data[0];
+            s->state |= data[0] & data[1];
+
+            apci_debug("writing '%s' to %#x\n", debug_byte(s->state), devpriv->regions[2].start + spriv->group*4 + spriv->port );
+            outb( devpriv->regions[2].start + spriv->group*4 + spriv->port, s->state );
+	}
+        apci_debug("reading from %#x\n", devpriv->regions[2].start + spriv->group*4 + spriv->port );
+        data[1] = inb( devpriv->regions[2].start + spriv->group*4 + spriv->port );
+        apci_debug("read '%s'\n", debug_byte(data[1]) );
+        /* data[1] = inb( dev->regions[2].start + spriv->group*4 + spriv->port ); */
+	/* apci_debug(" */
 	//data[1]=inw(dev->iobase + APCI_DIO);
-	
 	//data[1]=s->state;
 
 	return 2;
@@ -574,17 +583,14 @@ static int apci_dio_insn_config(comedi_device * dev, comedi_subdevice * s,
 
         comedi_spin_lock_irqsave(&devpriv->lock, flags);
 
-        apci_debug("Sending write to  + %#x\n", devpriv->regions[2].start + spriv->group*4 + 3 );
+
         apci_debug("Before: %s\n", debug_byte(devpriv->mode[spriv->group]) );
         /* devpriv->mode[spriv->group] = devpriv->mode[spriv->group] & calculate_direction( spriv, ~s->io_bits ); */
         devpriv->mode[spriv->group] = calculate_direction( spriv, devpriv->mode[spriv->group], ~s->io_bits );
         apci_debug("After:  %s\n", debug_byte(devpriv->mode[spriv->group]) );
-        /* outb( devpriv->base + spriv->group*4 + 1, ) */
+        apci_debug("Sending write to + %#x\n", devpriv->regions[2].start + spriv->group*4 + 3 );
+        outb( devpriv->regions[2].start + spriv->group*4 + 3, devpriv->mode[spriv->group] );
         comedi_spin_unlock_irqrestore(&devpriv->lock, flags);
-
-        /* outb( s->base + 3, dev->iobase + s->group  ); */
-        /* apci_debug("Writing out the new thing\n"); */
-	//outw(s->io_bits,dev->iobase + APCI_DIO_CONFIG);
 
 	return insn->n;
 }
