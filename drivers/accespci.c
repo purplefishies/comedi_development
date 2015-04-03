@@ -44,8 +44,11 @@ typedef enum {
 } PORT;
 
 typedef struct {
-    
-
+    int start;
+    int length;
+    int flags;
+    int enabled;
+    void *mapped_address;
 } io_region_t;
 
 
@@ -59,6 +62,7 @@ typedef struct {
     int got_regions;
     int plx_region_start;
     int plx_region_length;
+    io_region_t regions[6];
 } apci_private;
 
 typedef struct {
@@ -67,9 +71,6 @@ typedef struct {
     int group;
 
 } subdev_private;
-
-
-
 
 
 #define PCI_VENDOR_ID_APCI 0x494f
@@ -245,6 +246,39 @@ static int apci_attach(comedi_device * dev, comedi_devconfig * it)
             printk("I/O port conflict\n");
             return -EIO;
         }
+
+        devpriv->regions[2].start   = pci_resource_start(pdev, 2);
+        devpriv->regions[2].length  = pci_resource_len(pdev, 2);
+        devpriv->regions[2].flags   = pci_resource_flags(pdev, 2);
+        /* devpriv->regions[2].length  = devpriv->regions[2].end - devpriv->regions[2].start + 1; */
+        /* devpriv->irq                = pdev->irq; */
+        /* devpriv->irq_capable        = 1; */
+        apci_debug("bar[%d], start=%#x,len=%#x\n", 2,devpriv->regions[2].start, devpriv->regions[2].length );
+        if (devpriv->regions[2].flags & IORESOURCE_IO) {
+            apci_debug("requesting io region start=%08x,len=%d\n", devpriv->regions[2].start, devpriv->regions[2].length );
+            presource = request_region(devpriv->regions[2].start, devpriv->regions[2].length, "apci");
+        } else {
+            apci_debug("requesting mem region start=%08x,len=%d\n", devpriv->regions[2].start, devpriv->regions[2].length );
+            presource = request_mem_region(devpriv->regions[2].start, devpriv->regions[2].length, "apci");
+            if (presource != NULL) {
+                apci_debug("Remapping address start=%08x,len=%d\n", devpriv->regions[2].start, devpriv->regions[2].length );
+                devpriv->regions[2].mapped_address = ioremap(devpriv->regions[2].start, devpriv->regions[2].length);
+            }
+        }
+        if ( !presource ) {
+            apci_error("I/O port conflict\n");
+            return -EIO;
+        } else {
+            devpriv->regions[2].enabled = 1;
+        }
+
+
+        /* apci_debug("regions[2].start = %08x\n", devpriv->regions[2].start ); */
+        /* apci_debug("regions[2].end   = %08x\n", devpriv->regions[2].end ); */
+        /* apci_debug("regions[2].length= %08x\n", devpriv->regions[2].length ); */
+        /* apci_debug("regions[2].flags = %lx\n", devpriv->regions[2].flags ); */
+        /* apci_debug("irq = %d\n", devpriv->irq ); */
+
 
 
         /* devpriv->plx_region_end        = pci_resource_end(pdev, plx_bar); */
@@ -436,8 +470,15 @@ static int apci_detach(comedi_device * dev)
         }
 
         if (devpriv->plx_region_start ) {
-            apci_debug("Releasing plx_region_start=%#x,len=%#x", devpriv->plx_region_start, devpriv->plx_region_length );
+            apci_debug("Releasing plx_region_start=%#x,len=%#x\n", devpriv->plx_region_start, devpriv->plx_region_length );
             release_region( devpriv->plx_region_start, devpriv->plx_region_length);
+        }
+
+        for ( int i = 0; i < sizeof(devpriv->regions) / sizeof(io_region_t ); i ++ ) { 
+            if ( devpriv->regions[i].enabled ) {
+                apci_debug("Releasing region=%#x,len=%#x\n", devpriv->regions[i].start, devpriv->regions[i].length );
+                release_region( devpriv->regions[i].start, devpriv->regions[i].length );
+            }
         }
 
         if (dev->subdevices) {
