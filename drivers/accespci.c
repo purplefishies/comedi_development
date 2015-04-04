@@ -535,25 +535,25 @@ unsigned char calculate_direction( subdev_private *spriv, unsigned char omode, u
     unsigned char retval;
     unsigned char incval;
     unsigned char exclval;
-    int invbits =  (bits ==0 ? 1 : 0 );
+    int invbits = ( bits == 0 ? 1 : 0 );
+    apci_debug("bits was %s: port %c\n", debug_byte(bits), debug_port( spriv->port ));
     switch ( spriv->port ) {
     case PORT_A:
-        incval   = MAKE_BYTE(0,0,0,bits,0,0,0,0);
-        exclval  = MAKE_BYTE(1,1,1,bits,1,1,1,1);
+        incval   = MAKE_BYTE(0,0,0,invbits,0,0,0,0);
+        exclval  = MAKE_BYTE(1,1,1,0,1,1,1,1);
         break;
     case PORT_B:
-        incval   = MAKE_BYTE(0,0,0,0,0,0,bits,0);
-        exclval  = MAKE_BYTE(1,1,1,1,1,1,bits,1);
+        incval   = MAKE_BYTE(0,0,0,0,0,0,invbits,0);
+        exclval  = MAKE_BYTE(1,1,1,1,1,1,0,1);
         break;
     case PORT_C:
-
         if ( channel <= 3 ) {
-            apci_debug("Using <= 3, channel=%d, invbits=%d\n",channel, invbits);
-            incval   = MAKE_BYTE(0,0,0,0,0,0,0,invbits);
+            apci_debug("Using <= 3, channel=%d, bits=%d\n",channel, bits);
+            incval   = MAKE_BYTE(0,0,0,0,0,0,0,(bits & 0xf)==0?1:0);
             exclval  = MAKE_BYTE(1,1,1,1,1,1,1,0);
         } else {
-            apci_debug("Using >= 4, channel=%d, invbits=%d\n",channel,invbits );
-            incval   = MAKE_BYTE(0,0,0,0,invbits,0,0,0);
+            apci_debug("Using >= 4, channel=%d, bits=%d\n",channel,bits );
+            incval   = MAKE_BYTE(0,0,0,0,(bits&0xf0)==0?1:0,0,0,0);
             exclval  = MAKE_BYTE(1,1,1,1,0,1,1,1);
         }
         break;
